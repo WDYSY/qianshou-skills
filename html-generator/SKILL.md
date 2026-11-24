@@ -16,8 +16,19 @@ description: 把分析结论整理成精美的HTML可视化页面。当用户需
 - **单页面应用**，纯 HTML + CSS + JS，不依赖 Vue/React 等框架
 - **色彩风格**：如果没有更专业的风格，可以参考携程旅行网，主色 #0086F6（携程蓝）、辅助色 #FF7D13（活力橙）、背景 #F5F7FA、卡片白 #FFFFFF
 - **风格要求**：专业优雅、信息层次清晰
-- **布局**：合理留白，响应式适配
+- **布局**：合理留白，响应式适配（移动端红线见下方「移动端窄屏适配硬约束」）
 - **字体**：`-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif`
+
+### 移动端窄屏适配硬约束（375px 红线）
+
+生成的页面大多最终在手机（飞书内置浏览器，视口约 375px）里打开，**PC 端正常 ≠ 手机端正常**。总红线：**375px 视口下整页无横向溢出（`document.documentElement.scrollWidth` ≤ `window.innerWidth` + 2）**。`<head>` 里必须保留模板中的 `<meta name="viewport" content="width=device-width, initial-scale=1.0">`，缺失时手机会按约 980px 虚拟宽度渲染整页。以下为硬约束：
+
+1. **禁止写死宽度**：页面容器、卡片、图表容器禁止 `width: XXXpx` / `min-width: XXXpx` 这类固定像素宽（含「为了让图表好看一点」而加的 min-width）。限制布局上限只用 `max-width`：`.container { width: 100%; max-width: 1200px; margin: 0 auto; }`。
+2. **grid/flex 子项必须 `min-width: 0`**：CSS grid / flex 的直接子元素默认 `min-width: auto`，会被内容（canvas、nowrap 文本、宽表格）撑破轨道、把整页撑出横向滚动条；图表卡片、表格卡片等一律显式写 `min-width: 0`。
+3. **断点塌陷为单列**：PC 端多列布局（如图表网格 `grid-template-columns: 1fr 1fr`）必须在 `@media (max-width: 768px)` 下改为单列 `grid-template-columns: 1fr`，间距与内边距同步收窄。
+4. **宽表格必须包横向滚动容器**：列数多的表格禁止裸放在页面流里（右侧列会被手机屏幕硬切）。必须包一层 `.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }`，最小宽度写在 `table` 上（如 `table { min-width: 640px; }`），保证溢出只发生在表格内部滚动区，不撑破页面。
+5. **ECharts 自适应双保险**：`echarts.init(el)` 不传固定 width；每个图表除 `window.addEventListener('resize', …)` 外必须再挂 `ResizeObserver` 监听容器自身尺寸变化（飞书 webview 中布局塌陷/展开不一定触发 window resize），回调 debounce 约 200ms 后 `chart.resize()`。canvas 一旦按桌面宽度（如 800px）初始化又没有 resize，在手机上永远超宽。
+6. **窄屏降级**：375px 下 X 轴类目标签放不下时 `axisLabel: { rotate: 45, interval: 0 }`；类目 ≥ 8 个改横向条形图。标题允许换行而不是省略号截断；长文本加 `word-break: break-all`。
 
 ### 配色方案(参考)
 
@@ -63,7 +74,7 @@ ECharts 配置要求：
 - 使用上方配色方案的图表色板
 - 添加合理的动画效果
 - 图表容器设置合适的高度（至少 400px）
-- 响应式：监听 `window.resize` 事件调用 `chart.resize()`
+- 响应式：`window.resize` + `ResizeObserver` 双保险调用 `chart.resize()`（详见上方「移动端窄屏适配硬约束」第 5 条）
 
 #### ECharts 交互与防裁切硬约束
 
@@ -270,7 +281,12 @@ heatmapOverlay.setDataSet({
 - 复杂数据集超过页面承载时，添加筛选/切换交互
 - 详细报告类型页面，同时包含结构化的文字内容、专业高级的可视化模块
 - 图表需要有SQL、引用互联网数据需要有清晰的来源
-- **截图自检**（仅 `VISION_OK`）：发布前用 playwright 截图并 Read，在 1280px 桌面宽度下逐项 hover 所有图表系列，确认标题、系列名和值均正确，且不出现 `undefined`。打开每张图的 toolbox 数据视图，确认表头使用业务指标名而不是 `series0`。检查横向条形图、负数图和外置 label 的最左/最右数据标签，确认没有被裁切；再缩到 375px 宽度复查一次并触发 `chart.resize()`。若页面包含宽表/矩阵表或搜索框：在 375px 宽度下确认左侧 sticky 冻结列总宽不超过视口宽度的 45%、表头无错位白缝；并在搜索框中分别实测输入行关键词和列关键词（直接用 placeholder 里的示例词），确认不会出现全表消失或只剩一行表头。
+- **截图自检**（仅 `VISION_OK`）：发布前用 playwright 截图并 Read，在 1280px 桌面宽度下逐项 hover 所有图表系列，确认标题、系列名和值均正确，且不出现 `undefined`。打开每张图的 toolbox 数据视图，确认表头使用业务指标名而不是 `series0`。检查横向条形图、负数图和外置 label 的最左/最右数据标签，确认没有被裁切；再缩到 375px 宽度复查一次并触发 `chart.resize()`——这是必跑步骤，禁止跳过，**禁止用 `grep '@media'` 之类「断点存在性检查」代替 375px 实测**（断点写了 ≠ 窄屏正常：类目标签会被 `interval:'auto'` 自动隐藏，只有实测能发现）。在 375px 下逐项断言（任一不过，先修布局再发布，禁止带病发布）：
+  (a) `document.documentElement.scrollWidth` ≤ `window.innerWidth + 2`（整页无横向溢出）；
+  (b) 每张图表的全部 X 轴类目都在画布内可见（如 5 个来源就数出 5 个，一个不能少），轴标签无截断/重叠；
+  (c) 多列表格要么单屏完整显示、要么在 `.table-wrap` 内部横向可滚（禁止被屏幕边缘硬切）；
+  (d) 页面标题与卡片标题完整可读或正常换行，不允许省略号截断。
+若页面包含宽表/矩阵表或搜索框：在 375px 宽度下确认左侧 sticky 冻结列总宽不超过视口宽度的 45%、表头无错位白缝；并在搜索框中分别实测输入行关键词和列关键词（直接用 placeholder 里的示例词），确认不会出现全表消失或只剩一行表头。
 - **`SKIP_SCREENSHOT_QA` 时跳过整段截图自检**：不要 `browser_take_screenshot`、不要 Read 图片、也不要用截图核对版式；生成并发布后仍必须执行第四步的链接及正文校验。用户配图另走「配图发送」。
 
 ## 执行方式（必须遵守）

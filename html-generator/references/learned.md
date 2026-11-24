@@ -37,3 +37,34 @@
 - `<thead>` 统一用 `<th>`，固定列选择器统一用 `.idx` / `.rowhead` / `.rtype` / `.total`；
 - `@media (max-width: 768px)` 下只保留前 1～2 列（总宽 ≤ 160px）横向 `sticky`，其余列在移动端释放为横向可滚；
 - 行列双向搜索必须固定保留左侧信息列（`i < 4`），并按词元分别判定是筛行还是筛列，实测 placeholder 中的所有示例词。
+
+## 2026-11-24 · 看板页面手机端柱状图类目溢出屏幕、明细表右侧被硬切
+
+**症状**：生成的「国内门票质量缺陷 GMV 与毛利」看板（环形图 + 双轴分组柱状图 + 明细表）在 PC 端 1280px 下完全正常；手机端（飞书内置浏览器，视口约 375px）打开时：分组柱状图 5 个类目（AI点评/投诉/订单/事件/NPS）只有左侧约 2 个可见，右侧被推出屏幕外；底部明细表右侧列被屏幕硬切；页面标题被折叠成省略号；图例勉强换行、字号明显偏小。环形图卡片本身基本正常，说明 viewport meta 与单列堆叠大概率是生效的，问题出在个别超宽元素。
+
+**根因（实测修正版，2026-11-24 复盘原始会话日志 + 真实页面 375px 实测；推翻最初按截图猜测的「画布溢出」结论）**：
+1. **柱状图 X 轴标签 `axisLabel.interval: 'auto'` + `rotate: 0`（直接真凶）**：375px 下 ECharts 自动抽稀标签，5 个类目只显示「AI点评、事件」2 个。手机截图看着像「画布溢出屏幕」，实测画布 295px 完全在视口内——是标签被隐藏，不是柱子被裁。约束 6（窄屏 `interval: 0, rotate: 45`）与自检断言 (b)（类目一个不能少）精确命中。
+2. **QA 层跳过 375px 实测（逃逸主因）**：整份会话 0 次 resize 到 375px；主会话用 `grep -c '@media'` 的「断点存在性检查」当成响应式通过的代理证据直接发布（1280px 自检本身执行得很认真，还修了图例颜色与标签裁切）。已补「必跑 + 禁止代理检查 + 四断言」。
+3. 次要：369px 视口下 `scrollWidth=380`（11px 轻微横向溢出，断言 (a) 可拦）；只挂 `window.resize` 无 `ResizeObserver`（本案未直接致错，隐患，约束 5 覆盖）。
+4. **症状误读修正**：明细表其实包了 `.table-wrap { overflow-x: auto }` 正常内滚（307px 容器内滚 640px 内容）；断点单列、卡片无 min-width、表格滚动容器这些 v6 都做对了——约束 1-4 属预防性固化，不是本案根因。
+
+**修复与预防（已沉淀至 `SKILL.md`「移动端窄屏适配硬约束」）**：
+- 页面容器/卡片/图表容器禁止固定与最小像素宽，限宽只用 `max-width`；grid/flex 子项一律 `min-width: 0`；
+- `@media (max-width: 768px)` 多列布局塌陷为单列；
+- 宽表一律包 `.table-wrap { overflow-x: auto }`，最小宽度写在 `table` 上而非页面容器上；
+- ECharts 除 `window.resize` 外必须挂 `ResizeObserver`（debounce 后 `chart.resize()`），init 不传固定宽；
+- 375px 自检升级为四条硬断言（无横向溢出 / 全部类目可见 / 表格内部可滚 / 标题不截断），任一不过禁止发布。
+
+**排查手机端横向溢出元凶的快捷 JS**（375px devtools 或手机浏览器控制台执行）：
+
+```js
+[...document.querySelectorAll('body *')]
+  .filter(el => el.getBoundingClientRect().right > innerWidth + 2)
+  .slice(0, 8)
+  .map(el => el.tagName + '.' + String(el.className).trim().replace(/\s+/g, '.') + ' right=' + Math.round(el.getBoundingClientRect().right))
+```
+
+**取证与复盘姿势（本次实测验证过）**：
+- 服务器会话日志：skill-admin 会话详情页右上「下载会话日志」→ json（含 models / skills_summary（可看 skill 版本号）/ 全量消息与工具调用；不含子代理独立记录，截图是需登录的后台链接）。
+- 真实页面 375px 复测（比截图识图可靠）：登录后的页面里注入同源 iframe —— `f.src=location.href; f.style.width='375px'`，再量 `f.contentDocument.documentElement.scrollWidth` vs `f.contentWindow.innerWidth`、`.chart-box`/canvas 宽度、`.table-wrap` 是否内滚；读 ECharts 配置用 `echarts.getInstanceByDom(document.querySelector('.chart-box')).getOption()`（实例挂在 `.chart-box` 容器上，不是 canvas 的直接父层）。
+- 原始会话实锤：`338d1cc2-717-4184-96af-7791e50b7e26`（服务器 skill `html-generator v6`，主模型 `kr-claude-opus-5.5`，VISION_OK，发布地址 `https://super.ctrip-it.com/dc485b3d32e663e581099a7746f1b58e/`）。
