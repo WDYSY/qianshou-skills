@@ -1,0 +1,23 @@
+html-generator/references/learned.md
+  s_3117125bb34792::t_90bf42e129d51b 45-49,66-70
+  s_3117125bb34792::t_0c9156ad7ea8ba 40-44,50-65
+html-generator/SKILL.md
+  s_3117125bb34792::t_253c6cc5a11f7b 284
+  s_3117125bb34792::t_1fd32895cb23b2 19,22-32,77,285-289
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.52-trip",
+  "base_commit_sha": "d9802f3809fdc5f45ff780f4dc1c9a122fe60bfd",
+  "prompts": {},
+  "sessions": {
+    "s_3117125bb34792": {
+      "agent_id": {
+        "tool": "chengxiaobang",
+        "id": "s_4lrnrykkww86",
+        "model": "glm-5.3"
+      },
+      "human_author": "Wang Yan <wangyan@trip.com>"
+    }
+  }
+}
