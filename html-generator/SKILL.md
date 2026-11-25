@@ -16,19 +16,8 @@ description: 把分析结论整理成精美的HTML可视化页面。当用户需
 - **单页面应用**，纯 HTML + CSS + JS，不依赖 Vue/React 等框架
 - **色彩风格**：如果没有更专业的风格，可以参考携程旅行网，主色 #0086F6（携程蓝）、辅助色 #FF7D13（活力橙）、背景 #F5F7FA、卡片白 #FFFFFF
 - **风格要求**：专业优雅、信息层次清晰
-- **布局**：合理留白，响应式适配（移动端红线见下方「移动端窄屏适配硬约束」）
+- **布局**：合理留白，响应式适配
 - **字体**：`-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif`
-
-### 移动端窄屏适配硬约束（375px 红线）
-
-生成的页面大多最终在手机（飞书内置浏览器，视口约 375px）里打开，**PC 端正常 ≠ 手机端正常**。总红线：**375px 视口下整页无横向溢出（`document.documentElement.scrollWidth` ≤ `window.innerWidth` + 2）**。`<head>` 里必须保留模板中的 `<meta name="viewport" content="width=device-width, initial-scale=1.0">`，缺失时手机会按约 980px 虚拟宽度渲染整页。以下为硬约束：
-
-1. **禁止写死宽度**：页面容器、卡片、图表容器禁止 `width: XXXpx` / `min-width: XXXpx` 这类固定像素宽（含「为了让图表好看一点」而加的 min-width）。限制布局上限只用 `max-width`：`.container { width: 100%; max-width: 1200px; margin: 0 auto; }`。
-2. **grid/flex 子项必须 `min-width: 0`**：CSS grid / flex 的直接子元素默认 `min-width: auto`，会被内容（canvas、nowrap 文本、宽表格）撑破轨道、把整页撑出横向滚动条；图表卡片、表格卡片等一律显式写 `min-width: 0`。
-3. **断点塌陷为单列**：PC 端多列布局（如图表网格 `grid-template-columns: 1fr 1fr`）必须在 `@media (max-width: 768px)` 下改为单列 `grid-template-columns: 1fr`，间距与内边距同步收窄。
-4. **宽表格必须包横向滚动容器**：列数多的表格禁止裸放在页面流里（右侧列会被手机屏幕硬切）。必须包一层 `.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }`，最小宽度写在 `table` 上（如 `table { min-width: 640px; }`），保证溢出只发生在表格内部滚动区，不撑破页面。
-5. **ECharts 自适应双保险**：`echarts.init(el)` 不传固定 width；每个图表除 `window.addEventListener('resize', …)` 外必须再挂 `ResizeObserver` 监听容器自身尺寸变化（飞书 webview 中布局塌陷/展开不一定触发 window resize），回调 debounce 约 200ms 后 `chart.resize()`。canvas 一旦按桌面宽度（如 800px）初始化又没有 resize，在手机上永远超宽。
-6. **窄屏降级**：375px 下 X 轴类目标签放不下时 `axisLabel: { rotate: 45, interval: 0 }`；类目 ≥ 8 个改横向条形图。标题允许换行而不是省略号截断；长文本加 `word-break: break-all`。
 
 ### 配色方案(参考)
 
@@ -48,7 +37,7 @@ description: 把分析结论整理成精美的HTML可视化页面。当用户需
 
 ```html
 <!-- ✅ 推荐：pages 公网 vendor（playwright/本地/pages 三端都能用） -->
-<script src="{{当前助手上下文中的 GitLab Pages 根地址}}/static/vendor/echarts.min.js"></script>
+<script src="{{当前助手上下文中的报告访问根地址}}/static/vendor/echarts.min.js"></script>
 
 <!-- ❌ 避免：jsdelivr / K8s 集群内域名（{SYS_BASE_URL}/...）— playwright 沙箱通常走不通 -->
 ```
@@ -74,7 +63,7 @@ ECharts 配置要求：
 - 使用上方配色方案的图表色板
 - 添加合理的动画效果
 - 图表容器设置合适的高度（至少 400px）
-- 响应式：`window.resize` + `ResizeObserver` 双保险调用 `chart.resize()`（详见上方「移动端窄屏适配硬约束」第 5 条）
+- 响应式：监听 `window.resize` 事件调用 `chart.resize()`
 
 #### ECharts 交互与防裁切硬约束
 
@@ -129,7 +118,7 @@ tooltip: {
 流程图、时序图、类图、ER 图、状态机、Gantt、思维导图等"文字驱动的设计图"用 mermaid。**同样用项目本地缓存**：
 
 ```html
-<script src="{{当前助手上下文中的 GitLab Pages 根地址}}/static/vendor/mermaid.min.js"></script>
+<script src="{{当前助手上下文中的报告访问根地址}}/static/vendor/mermaid.min.js"></script>
 <script>mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose' });</script>
 
 <div class="mermaid">
@@ -212,13 +201,14 @@ heatmapOverlay.setDataSet({
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{页面标题}}</title>
-    <!-- favicon: **必须包含**这一行原样写法。本地预览不解析这个占位符（favicon 会 404，页面主体正常）；
-         publish_to_pages.py 发布时会自动重写为 pages 仓库的相对路径 ../../logov4.jpg。
-         不要省略、不要改成 data: URI、不要自己写相对路径、不要把占位符替换成实际域名。 -->
-    <link rel="icon" type="image/jpeg" href="{SYS_BASE_URL}/static/logov4.jpg">
-    <script src="{{当前助手上下文中的 GitLab Pages 根地址}}/static/vendor/echarts.min.js"></script>
+    <!-- favicon: **必须包含**这一行原样写法。用「报告访问根地址」，跟着出口走：
+         pages 出口发布时 publish_to_pages.py 会重写成 ../../logov4.jpg；local / remote 出口由
+         本服务或托管服务同源提供 /static/logov4.jpg。
+         不要省略、不要改成 data: URI、不要自己写相对路径、不要写死具体域名。 -->
+    <link rel="icon" type="image/jpeg" href="{{当前助手上下文中的报告访问根地址}}/static/logov4.jpg">
+    <script src="{{当前助手上下文中的报告访问根地址}}/static/vendor/echarts.min.js"></script>
     <!-- 如需 mermaid 设计图 -->
-    <!-- <script src="{{当前助手上下文中的 GitLab Pages 根地址}}/static/vendor/mermaid.min.js"></script> -->
+    <!-- <script src="{{当前助手上下文中的报告访问根地址}}/static/vendor/mermaid.min.js"></script> -->
     <!-- 如需地图 -->
     <script src="https://api.map.baidu.com/api?v=2.0&ak=9oOu88qSixRH10Coy9Puw0hC6bq8md3u"></script>
     <!-- 如需热力图 -->
@@ -257,10 +247,13 @@ heatmapOverlay.setDataSet({
    - 命名只用英文字母、数字、下划线
    - 保存前确保年月子目录存在（自动创建）
 
-2. **GitLab Pages 发布**（给用户的对外链接）
-   - 由 `publish_to_pages.py` 按当前助手上下文，把本地副本拷贝并 push 到该助手的 Pages 仓库
-   - 最终报告 URL 必须以本次发布脚本成功返回的完整 URL 为准，禁止自行拼接。
-   - 正常交付使用脚本返回且通过下文强校验的 Pages 链接；发布或校验失败时按下文兜底规则处理。
+2. **发布拿链接**（给用户的对外链接）
+   - 由 `mcp__static_pages__publish_html` 按当前用户与助手上下文发布，宿主有三个出口（skill 侧用法一致）：
+     - `pages`：推送到 GitLab Pages，工具返回 `status: "submitted"`，链接在 Pages 仓库上；
+     - `local`：由本服务 `/generated` 直出，工具返回 `status: "published"`；
+     - `remote`：上传到独立部署的报告托管服务，工具返回 `status: "published"`。
+   - 两个出口对 skill 的用法完全一样：**最终报告 URL 必须以本次宿主发布工具成功返回的完整 URL 为准**，禁止自行拼接；本地副本路径不能当交付链接用。
+   - 发布或校验失败时按下文兜底规则处理。
 
 ### 访问 URL
 
@@ -275,18 +268,13 @@ heatmapOverlay.setDataSet({
 
 - HTML 文件必须完整可独立运行
 - 页面在浏览器中打开后应立即渲染，无空白/报错
-- **`<head>` 里必须有 favicon 链接**（按上方模板里的 SYS_BASE_URL 写法），不要省略；publish_to_pages.py 会负责把它重写成 pages 上的相对路径
+- **`<head>` 里必须有 favicon 链接**（按上方模板，用「报告访问根地址」+ `/static/logov4.jpg`），不要省略；pages 出口由 publish_to_pages.py 重写成相对路径，local / remote 出口保持绝对地址，由宿主同源提供 `/static/logov4.jpg`
 - 图表数据直接嵌入 JS 变量，不依赖额外接口
 - 页面底部标注生成时间和数据来源
 - 复杂数据集超过页面承载时，添加筛选/切换交互
 - 详细报告类型页面，同时包含结构化的文字内容、专业高级的可视化模块
 - 图表需要有SQL、引用互联网数据需要有清晰的来源
-- **截图自检**（仅 `VISION_OK`）：发布前用 playwright 截图并 Read，在 1280px 桌面宽度下逐项 hover 所有图表系列，确认标题、系列名和值均正确，且不出现 `undefined`。打开每张图的 toolbox 数据视图，确认表头使用业务指标名而不是 `series0`。检查横向条形图、负数图和外置 label 的最左/最右数据标签，确认没有被裁切；再缩到 375px 宽度复查一次并触发 `chart.resize()`——这是必跑步骤，禁止跳过，**禁止用 `grep '@media'` 之类「断点存在性检查」代替 375px 实测**（断点写了 ≠ 窄屏正常：类目标签会被 `interval:'auto'` 自动隐藏，只有实测能发现）。在 375px 下逐项断言（任一不过，先修布局再发布，禁止带病发布）：
-  (a) `document.documentElement.scrollWidth` ≤ `window.innerWidth + 2`（整页无横向溢出）；
-  (b) 每张图表的全部 X 轴类目都在画布内可见（如 5 个来源就数出 5 个，一个不能少），轴标签无截断/重叠；
-  (c) 多列表格要么单屏完整显示、要么在 `.table-wrap` 内部横向可滚（禁止被屏幕边缘硬切）；
-  (d) 页面标题与卡片标题完整可读或正常换行，不允许省略号截断。
-若页面包含宽表/矩阵表或搜索框：在 375px 宽度下确认左侧 sticky 冻结列总宽不超过视口宽度的 45%、表头无错位白缝；并在搜索框中分别实测输入行关键词和列关键词（直接用 placeholder 里的示例词），确认不会出现全表消失或只剩一行表头。
+- **截图自检**（仅 `VISION_OK`）：发布前用 playwright 截图并 Read，在 1280px 桌面宽度下逐项 hover 所有图表系列，确认标题、系列名和值均正确，且不出现 `undefined`。打开每张图的 toolbox 数据视图，确认表头使用业务指标名而不是 `series0`。检查横向条形图、负数图和外置 label 的最左/最右数据标签，确认没有被裁切；再缩到 375px 宽度复查一次并触发 `chart.resize()`。若页面包含宽表/矩阵表或搜索框：在 375px 宽度下确认左侧 sticky 冻结列总宽不超过视口宽度的 45%、表头无错位白缝；并在搜索框中分别实测输入行关键词和列关键词（直接用 placeholder 里的示例词），确认不会出现全表消失或只剩一行表头。
 - **`SKIP_SCREENSHOT_QA` 时跳过整段截图自检**：不要 `browser_take_screenshot`、不要 Read 图片、也不要用截图核对版式；生成并发布后仍必须执行第四步的链接及正文校验。用户配图另走「配图发送」。
 
 ## 执行方式（必须遵守）
@@ -355,9 +343,16 @@ Agent({
 
 `--topic` 用短横线分隔的英文小写（如 `order-analysis`、`pv-trend`），用于生成目录名 `<YYYYMMDD>-<topic>`。
 
-脚本输出的最后一行就是公网 URL（成功时 stdout 仅一行；失败 stderr 给原因，且 exit code 非 0）。
+**页面归属与修改规则**：
+- 作者由宿主当前会话的工号确定；没有工号时按助手与 open_id 确定。缺少身份或发布工具就停止，不使用默认用户，也不修改环境变量冒充作者。
+- 本人修改可更新并保持原链接；其他用户或缺少作者记录的历史页面在 `pages` 出口会自动另存，返回新的随机链接，原页面保持不变；`remote` 出口没有另存，非本人站点直接拒绝，只能重新发布为新站点。历史旧链接保留，仅新页面与另存副本使用随机 hash。
+- 禁止直接 Edit/Write/Bash 改 Pages checkout、`public/` 或 `.pages-metadata/`；聊天进程的文件系统沙箱禁止写这些目录，所有发布必须经过宿主工具。
+- 不生成首页、用户目录页、页面列表或返回目录的导航；只有拿到完整页面链接才能访问具体报告。作者记录保存在非公开的 `.pages-metadata/`，不得放入 HTML 或 public。
+- `publish_to_pages.py` 是宿主内部实现及可信终端维护入口；`--skip-push` 仅供维护者在临时 checkout 本地验证，不代表已发布。历史无归属批量迁移入口已停用。
 
-执行时必须把 stdout、stderr 分别保存到本次任务独立的临时目录，并记录发布脚本自身的退出码；不得用 `| tail -1` 等管道掩盖失败。只有退出码为 0 且 stdout 为单行完整 HTTP(S) URL 时，才将该行保存为本次报告的权威 URL（仅去除行尾换行，不修改 URL）。git push 成功只代表提交完成，不代表页面已部署、可访问。
+只有宿主工具返回 `status: "submitted"`（Pages 出口）或 `status: "published"`（local / remote 出口）和完整 `url` 时，才将 `url` 原样保存为本次报告的权威 URL。工具报错不能当作成功；提交发布不代表页面已部署、可访问，仍须执行下面的 GET 与正文校验。
+
+可信终端直接运行 `publish_to_pages.py` 时：把 stdout、stderr 分别保存到本次任务独立的临时目录并记录退出码，不得用 `| tail -1` 掩盖失败；只有退出码为 0 且 stdout 是单行完整 HTTP(S) URL 时，才把该行保存为权威 URL（仅去掉行尾换行，不修改 URL）。git push 成功只代表提交完成，不代表页面已部署、可访问。
 
 **第四步：回复用户**
 
@@ -376,24 +371,28 @@ Agent({
 
 1. **先固定待发送正文**：完成结论整理、截图及配图后，将完整最终回复保存为本次任务的临时草稿。用 Bash/Python 从保存的发布 stdout 读取 URL，并据此生成草稿中的 Markdown 链接，禁止手工重输地址。临时文件仅用于本次交付，不修改发布脚本或宿主代码。
 2. **机器比对实际链接**：用 Bash/Python 从这份草稿提取报告链接目标，与保存的权威 URL 做逐字相等断言；有多处报告链接时逐一检查。比较对象必须是待发送正文里的链接，不能拿两个自行填写的 URL 或同一个变量互相比对。任一不一致，先重新生成链接并重跑校验，禁止发送该草稿。
-3. **访问待发送地址**：对上一步从草稿提取的完整 URL 发起真实 GET（可用 `curl -L` 或浏览器），记录请求 URL、最终响应 URL、HTTP 状态码和响应正文。单次请求最多 15 秒、最多跟随 5 次重定向；不能只做 HEAD、检查域名首页或打开本地 HTML。请求失败、超时、404、5xx 均不通过；重定向后的 200 也须继续核对内容，且不能自行用重定向地址替换脚本返回值。
-4. **确认确实是本次报告**：最终响应必须为 HTTP 200；读取实际响应正文/页面 DOM，核对本地 HTML 中的报告标题及至少一项本次报告特有的内容（例如统计时间范围和关键指标值）。仅找到 `<html>`、通用页面标题或图表容器不算通过；登录页、代理报错页、空白页、其他报告及旧版本内容均不通过。`SKIP_SCREENSHOT_QA` 只跳过截图识图，不能跳过 GET 和文本内容校验。
-5. **依据结果交付**：工具记录中必须具备“链接完全一致、HTTP 200、标题及内容匹配”三项证据，才能回复报告已生成并提供入口。发送时原样复用已校验草稿，不重新拼写链接；若之后修改正文里的报告链接，必须重新执行第 2～4 项。进度消息在校验完成前只说明正在发布/验证，不提前发送报告入口。
+3. **用发布工具返回的指纹校验**：`mcp__static_pages__publish_html` 成功时会带 `verify` 字段（`verified`、`entrySha256`、`pageTitle`、`textHead`、`fileCount`、`totalBytes`），它是托管服务读落盘文件算出来的，已和本地草稿逐字节比对过。报告页在飞书登录后面，用 `curl -L` 或浏览器打开只会拿到 302 跳登录页——**这是登录保护生效，不是发布失败**，不要为此反复发 GET 请求，也不要把 302 当成校验不通过。
+4. **确认确实是本次报告**：核对 `verify.pageTitle` 与本地 HTML 的 `<title>` 一致、`verify.textHead` 开头文字与本次报告内容对得上、`verify.fileCount` / `totalBytes` 与本地草稿的文件数和体积相符。发布工具没有返回 `verify`、或 `verified` 不是 true，按"未完成验证"处理。
+5. **依据结果交付**：工具记录中必须具备"链接完全一致、`verify.verified=true`、标题与正文匹配"三项证据，才能回复报告已生成并提供入口。发送时原样复用已校验草稿，不重新拼写链接；若之后修改正文里的报告链接，必须重新执行第 2～4 项。进度消息在校验完成前只说明正在发布/验证，不提前发送报告入口。
 
 **重要：发布或校验失败的兜底**
 
 - 发布脚本非 0 退出码：报告“发布失败”，附脱敏后的 stderr 摘要，不把残留 stdout 当作成功 URL。
-- 发布脚本成功但访问校验未通过：报告“已提交发布，但链接访问验证未通过”，说明实际 HTTP 状态或网络/权限错误，不能宣称“页面可正常访问”。对于可能的部署延迟（404/5xx），只对同一 URL 每隔 10 秒重试，含首次请求最多 3 次；不为重试访问而重复发布、换目录或猜另一个地址。不得无依据承诺“30 秒后可访问”。
-- 无法执行工具校验或无法读取正文：明确说“链接尚未完成验证”，不伪造“返回 200 / 标题正常”等结果。暂不将未通过校验的地址作为可用报告入口交付，保留发布原始输出供排查。
-- 需要内部预览兜底时，只能用真实本地副本路径对应的 `{{sys_base_url}}/generated/{YYYYMM}/{filename}`，也须实际 GET 并核对标题与内容，通过后才提供；明确标注“内部预览，需相应网络访问条件”。若内部预览也无法验证，则仅说明文件已生成和当前阻塞原因，不继续发送未经验证的链接。
+- 发布成功但指纹校验未通过：报告"已提交发布，但未完成验证"，说明是校验接口失败还是内容指纹不一致；不要重复发布，也不要改发另一个地址。
+- 发布工具没有返回 `verify`：明确说"链接尚未完成验证"，不伪造"已验证通过"的结果，也不把未通过校验的地址当作可用报告入口交付，保留发布原始输出供排查。
+- **报告页面只允许说明状态，不允许换链接**：`{{sys_base_url}}/generated/...` 是不过登录的公开挂载，HTML 报告一律不提供该地址（下载类的 CSV/PPT 等产物另按 system prompt 的下载链接规则走）。发布或校验没通过时，如实说"已发布但未完成验证"并给出阻塞原因，不要拿内网链接兜底。
 
 **用户反馈旧链接打不开时**：先找回对应报告那次发布的原始工具输出，将旧回复中的链接与其比较，再对准备补发的实际链接执行上述校验。找不到原始输出时，明确缺少发布证据，先查发布记录；不能根据标题、日期或残缺路径猜地址，也不能默认重新生成/发布报告。只根据工具证据说明是链接不一致、HTTP 错误还是当前网络无法验证，不臆测“复制串行”等内部原因。
 
 ### 子 Agent prompt 关于 vendor 引用的注意事项
 
-子 Agent 生成 HTML 时**默认引用当前助手上下文中的 pages 公网 vendor**（即 `<script src="{{GitLab Pages 根地址}}/static/vendor/echarts.min.js">`）——pages 公网可达，playwright 截图能跑通，本地浏览器能直接打开，发布到 pages 仓库时 `publish_to_pages.py` 会自动重写成相对路径 `../../static/vendor/xxx`。
+子 Agent 生成 HTML 时**统一引用当前助手上下文里的「报告访问根地址」**（即 `<script src="{{报告访问根地址}}/static/vendor/echarts.min.js">`），不要自己判断落在哪个出口：
 
-**禁止**写 `{SYS_BASE_URL}/static/vendor/...` 或 `http://port8038.<container>.gps.cloud.ctripcorp.com/static/vendor/...`：这种 K8s 集群内域名 playwright 沙箱走不通，截图直接拿到空白图。**子 Agent 不需要也不应该自己处理 publish 转换**。
+- `pages` 出口：该地址就是 Pages 根，公网可达，playwright 截图能跑通；发布时 `publish_to_pages.py` 会自动重写成相对路径 `../../static/vendor/xxx`。
+- `local` 出口：该地址是本服务根，`/static/vendor/*` 由宿主直接映射到同一份 vendor 文件；页面发布后原样生效，不做重写。
+- `remote` 出口：该地址是托管服务公网域名，`/static/vendor/*` 和 `/static/logov4.jpg` 由托管服务同源提供；页面发布后原样生效，不做重写。
+
+**禁止**写死 `http://port8038.<container>.gps.cloud.ctripcorp.com/static/vendor/...`：K8s 集群内域名 playwright 沙箱走不通，截图直接拿到空白图。**子 Agent 不需要也不应该自己处理 publish 转换**。
 
 ## AI 配图（可选）
 

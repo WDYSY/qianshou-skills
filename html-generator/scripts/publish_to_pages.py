@@ -50,6 +50,12 @@ VENDOR_REWRITE = [
         re.compile(r"https?://pages\.release\.ctripcorp\.com/(?:super/ttd-super-assistant|qiuyuli/ttd-super-assisstant)/static/vendor/"),
         "../../static/vendor/",
     ),
+    # SKILL 模板统一写「报告访问根地址」+ /static/...；pages 出口下它就是 Pages 根，
+    # 所以 favicon 也要按 Pages 根再重写一次（vendor 已在上面覆盖）。
+    (
+        re.compile(r"https?://pages\.release\.ctripcorp\.com/(?:super/ttd-super-assistant|[^/]+/[^/]+)/static/logov4\.jpg"),
+        "../../logov4.jpg",
+    ),
     # favicon：本地预览用 SYS_BASE_URL 直连 ui/static/logov4.jpg（也兼容旧的 favicon.ico/png），
     # 发布到 pages 时统一改成相对路径指向 public/logov4.jpg
     (
